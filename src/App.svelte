@@ -89,15 +89,142 @@
     let faces = ['jack_of_clubs', 'jack_of_diamonds', 'jack_of_hearts', 'jack_of_spades', 'king_of_clubs', 'king_of_diamonds',
         'king_of_hearts', 'king_of_spades', 'queen_of_clubs', 'queen_of_diamonds', 'queen_of_hearts', 'queen_of_spades']
 
+    class player {
+        constructor() {
+            this.hand = [];
+            this.score = 0;
+            this.special_win = false;
+            this.bust = false;
+        }
+        draw (dck) {
+            // Randomly select a card.
+            dck = shuffle(dck);
+            this.hand = this.hand.concat(dck[0]);
+            this.calc_score(dck[0])
+            // Return the card so we know what to add to discard pile.
+            return dck[0];
+        }
+        calc_score(card) {
+            if (this.hand.length === 2) {
+                if ((this.hand[0] in aces || this.hand[0] in faces) && (this.hand[1] in aces || this.hand[1] in faces)
+                    && !(this.hand[0] in aces && this.hand[1] in aces) && !(this.hand[0] in faces && this.hand[1] in faces)) {
+                    this.special_win = true;
+                }
+            } else {
+                if (!(card in aces)) {
+                    this.score += values[card];
+                } else {
+                    if (this.score+11 <= 21) this.score + 11;
+                    else this.score +1;
+                }
+            }
+            if (this.score > 21) {
+                this.bust = true;
+            }
+        }
+        clear_hand () {
+            this.hand = [];
+            this.score = 0;
+            this.special_win = false;
+        }
+    }
+
     const game = {
         win_lose_modal_open: false,
         settings_modal_open: true,
+        settings_info: null,
+        settings_msg: "",
         game_running: false,
         wins: 0,
         losses: 0,
+        won: false,
+        lost: false,
         no_of_decks: 0,
-        deck: []
+        deck: [],
+        dealer: null,
+        player: null,
+        open_close_settings_modal: function () {this.settings_modal_open = !this.settings_modal_open;},
+        player_score: function () {
+            return this.player.score;
+        },
+        draw: function (p) {
+            this.deck.remove(p.draw(this.deck));
+        },
+        player_won: function () {
+            sleep(2000);  // Sleep for 2 seconds to see they've won.
+            this.wins += 1;
+            this.win_lose_modal_open = true;
+            this.won = true;
+        },
+        player_lost: function () {
+            this.losses += 1;
+            this.win_lose_modal_open = true;
+            this.lost = true;
+        },
+        check_win: function () {
+            if (!this.player.special_win && !this.dealer.special_win) {
+                if (this.dealer.score >= this.player.score) this.player_lost();
+                else this.player_won();
+            }
+            else {
+                if (this.player.special_win) {
+                    this.player_won();
+                } else if (this.dealer.special_win){
+                    this.player_lost();
+                }
+            }
+        },
+        draw_player: function () {
+            this.draw(this.player);
+            if (this.player.bust) {
+                this.player_lost();
+            }
+        },
+        stand: function () {
+            while (this.dealer.score < 17) {
+                this.draw(this.dealer);
+            }
+            if (this.dealer.bust) {
+                this.player_won();
+            }
+            else if (this.dealer.score >= this.player.score) {
+                this.player_lost()
+            }
+            else {
+                this.player_won();
+            }
+        },
+        setup: function () {
+            // Build up the decks.
+            if (this.no_of_decks <= 0) {
+                this.settings_msg = "Number of decks must be greater than 0.";
+                this.settings_info = true;
+                this.settings_modal_open = true;
+                return;
+            }
+            else {
+                this.settings_msg = "";
+                this.settings_info = false;
+            }
+            for (let i=0; i<=this.no_of_decks; i++) {
+                this.deck = this.deck.concat(Object.keys(values));
+            }
+            this.game_running = true;
+            this.player = new player();
+            this.dealer = new player();
+            for (let i = 0; i<= 2; i++) {
+                this.draw(this.dealer);
+                this.draw(this.player);
+            }
+            if (this.dealer.special_win) {
+                this.player_lost();
+            } else if (this.player.special_win) {
+                this.player_won();
+            }
+        }
     }
+
+    $: {if (!game.settings_modal_open && !game.game_running) game.setup();}
 
     // $: {if (!modalOpen) reset()}
 
@@ -224,12 +351,12 @@
                 </div>
             </div>
         </div>
-        <Modal text_colour_title="{game.win ? 'text-success': 'text-danger'}" bind:isOpen={game.win_lose_modal_open}>
+        <Modal text_colour_title="{game.won ? 'text-success': 'text-danger'}" bind:isOpen={game.win_lose_modal_open}>
             <span slot="title">
-                {game.win ? 'You Win!' : 'You Lose'}
+                {game.won ? 'You Win!' : 'You Lose'}
             </span>
             <span slot="body">
-                {game.win ? 'Well done you\'ve won! You have': 'Oh You\'ve lost. You have'} <span class="text-success">{game.wins} {game.wins !== 1 ? 'Wins' : 'Win'} </span> and <span class="text-danger">{game.losses} {game.losses !== 1 ? 'Losses' : 'Loss'}</span>
+                {game.won ? 'Well done you\'ve won! You have': 'Oh You\'ve lost. You have'} <span class="text-success">{game.wins} {game.wins !== 1 ? 'Wins' : 'Win'} </span> and <span class="text-danger">{game.losses} {game.losses !== 1 ? 'Losses' : 'Loss'}</span>
             </span>
         </Modal>
     {:else}
@@ -244,6 +371,11 @@
                         </label>
                     <input type="number" class="form-control" id="number-of-decks" bind:value={game.no_of_decks}>
                 </div>
+                {#if game.settings_info !== null}
+                    <div class="mb-3 text-danger">
+                        <p>{game.settings_msg}</p>
+                    </div>
+                {/if}
             </span>
         </Modal>
     {/if}

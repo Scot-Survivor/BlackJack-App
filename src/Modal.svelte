@@ -7,26 +7,30 @@
     let close = function () {};
     export let isOpen = false;
 
+
     $: { if (isOpen)
         open()
     else close() }
 
     onMount(() => {
         modalTarget = new bootstrap.Modal(modalElement, {backdrop: 'static', keyboard: true, focus: true});
+        $: {modalTarget.isOpen = isOpen;}
         open = () => {
+            console.log("showing.")
             modalTarget.show();
+            isOpen = true;
         };
         close = () => {
             modalTarget.hide();
+            console.log("hiding.");
             isOpen = false;
         }
-
     } )
 </script>
 <slot name="buttonToOpen">
 
 </slot>
-<div class="modal fade" tabindex="-1" id="modal" bind:this={modalElement}>
+<div class="modal fade" tabindex="-1" bind:this={modalElement}>
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
